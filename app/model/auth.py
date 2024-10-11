@@ -3,8 +3,11 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import HTTPException, Depends
+from dotenv import load_dotenv
 
-SECRET_KEY = "d8e2293b662f82266013c4183e7d5eff"
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
