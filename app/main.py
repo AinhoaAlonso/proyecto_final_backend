@@ -7,24 +7,24 @@ from fastapi.security import OAuth2PasswordBearer
 from datetime import date
 
 
-from model.users_connection import UsersConnection
-from model.posts_connection import PostsConnection
-from model.products_connection import ProductsConnection
-from model.auth import create_token
-from model.auth import verify_token
-from model.orders_customers_connection import OrdersCustomersConnections
-from schema.users_schema import CreateUsersSchema
-from schema.posts_schema import PostSchema
-from schema.posts_schema import PostsResponseSchema
-from schema.users_schema import LoginSchema
-from schema.users_schema import LoginResponseSchema
-from schema.token_schema import TokenSchema
-from schema.products_schema import InsertProductsSchema
-from schema.orders_schema import CreateOrderProductsSchema
-from schema.orders_schema import CreateCustomers
-from schema.orders_schema import CreateOrdersSchema
-from schema.products_schema import ProductsSchema
-from schema.orders_schema import CustomerResponse
+from app.model.users_connection import UsersConnection
+from app.model.posts_connection import PostsConnection
+from app.model.products_connection import ProductsConnection
+from app.model.auth import create_token
+from app.model.auth import verify_token
+from app.model.orders_customers_connection import OrdersCustomersConnections
+from app.schema.users_schema import CreateUsersSchema
+from app.schema.posts_schema import PostSchema
+from app.schema.posts_schema import PostsResponseSchema
+from app.schema.users_schema import LoginSchema
+from app.schema.users_schema import LoginResponseSchema
+from app.schema.token_schema import TokenSchema
+from app.schema.products_schema import InsertProductsSchema
+from app.schema.orders_schema import CreateOrderProductsSchema
+from app.schema.orders_schema import CreateCustomers
+from app.schema.orders_schema import CreateOrdersSchema
+from app.schema.products_schema import ProductsSchema
+from app.schema.orders_schema import CustomerResponse
 
 
 app = FastAPI()
