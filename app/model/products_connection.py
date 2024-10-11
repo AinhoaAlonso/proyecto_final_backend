@@ -4,18 +4,19 @@ import psycopg2
 from psycopg2 import sql
 from typing import List
 from app.schema.products_schema import ProductsSchema
-from app.model.database import get_connection, release_connection
-
+from app.model.database import get_connection
 
 class ProductsConnection():
-
     def __init__(self):
-        pass
+        self.connection = get_connection()
+    
+    def __del__(self):
+        if self.connection:
+            self.connection.close()
     
     def get_products(self) -> List[ProductsSchema]:
-        conn_products = get_connection()
         try:
-            with conn_products.cursor() as cur:
+            with self.connection.cursor() as cur:
                 cur.execute("""
                     SELECT products_id, products_name, products_description, products_price,products_image_url, products_stock, products_category, products_is_active FROM "products"
                 """)
@@ -38,14 +39,13 @@ class ProductsConnection():
         except Exception as e:
             print(f"Error al mostrar los productos: {e}")
             raise HTTPException(status_code=500, detail=f"Error al mostrar los productos: {e}")
-        finally:
-            release_connection(conn_products)
     
-    def get_product_id(self, products_id: int) -> ProductsSchema:
-        conn_products = get_connection()
+    def get_product_id(self, products_id: int) -> None:
+        if self.connection is None:
+            raise Exception("Conexión a la base de datos no establecida")
         
         try:
-            with conn_products.cursor() as cur:
+            with self.connection.cursor() as cur:
                 cur.execute("""
                     SELECT products_id, products_name, products_description, 
                            products_price, products_image_url, products_stock, 
@@ -67,35 +67,45 @@ class ProductsConnection():
                         products_is_active=result[7]
                     )
                 else:
-                    raise HTTPException(status_code=404, detail="Producto no encontrado.") 
+                    return None  
             
         except Exception as e:
             print(f"Error para mostrar el producto: {e}")
-            raise HTTPException(status_code=500, detail="Error interno al obtener el producto.")
-        finally:
-            release_connection(conn_products)
+            raise
+    
+    async def save_file(self, products_image_url: UploadFile)-> str:
+        print("Guardando archivo...") 
+        directory = "images_uploads/products"
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        file_location = f"images_uploads/products/{products_image_url.filename}"
+      
+        with open(file_location, "wb") as f:
+            f.write(await products_image_url.read())
+        return file_location
     
     async def insert_products(self, data:dict)-> None:
-        conn_products = get_connection()
         try: 
-            with conn_products.cursor() as cur:
+            print(f"Datos a insertar: {data}")
+            
+            with self.connection.cursor() as cur:
                 cur.execute(sql.SQL("""
                     INSERT INTO "products"(products_name, products_description, products_price, products_image_url, products_stock, products_category, products_is_active) VALUES (%(products_name)s, %(products_description)s, %(products_price)s, %(products_image_url)s, %(products_stock)s, %(products_category)s, %(products_is_active)s);
                 """), data)
                 
-                conn_products.commit()
+                self.connection.commit()
                 print("Producto guardado correctamente.")
         except Exception as e:
-            conn_products.rollback()
+            self.connection.rollback()
             print(f"Error al insertar el producto: {e}")
             raise HTTPException(status_code=500, detail="Error al insertar el producto.")
-        finally:
-            release_connection(conn_products)
 
     async def update_products(self, products_id:int, data:dict)->None:
-        conn_products = get_connection()
         try:
-            with conn_products.cursor() as cur:
+            print(f"Datos a actualizar: {data}")
+            with self.connection.cursor() as cur:
                 cur.execute(sql.SQL("""
                     UPDATE "products" SET products_name=%(products_name)s, products_description=%(products_description)s, products_price=%(products_price)s, products_image_url=%(products_image_url)s, products_stock=%(products_stock)s, products_category=%(products_category)s, products_is_active=%(products_is_active)s WHERE products_id = %(products_id)s;
                 """), {**data, "products_id": products_id})
@@ -103,19 +113,17 @@ class ProductsConnection():
                 if cur.rowcount == 0:
                     raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-                conn_products.commit()
+                self.connection.commit()
                 print("Producto actualizado correctamente.")
         except Exception as e:
-            conn_products.rollback()
+            self.connection.rollback()
             print(f"Error al actualizar el producto: {e}")
             raise HTTPException(status_code=500, detail="Error al actualizar el producto.")
-        finally:
-            release_connection(conn_products)
     
     async def update_products_stock(self, products_id:int, products_stock:int) -> None:
-        conn_products = get_connection()
         try:
-            with conn_products.cursor() as cur:
+            print(f"Actualizando el stock del producto {products_id} a {products_stock}.")
+            with self.connection.cursor() as cur:
                 cur.execute(sql.SQL("""
                     UPDATE "products" SET products_stock=%(products_stock)s WHERE products_id = %(products_id)s;
                 """), {"products_stock": products_stock, "products_id": products_id})
@@ -123,19 +131,18 @@ class ProductsConnection():
                 if cur.rowcount == 0:
                     raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-                conn_products.commit()
+                self.connection.commit()
                 print("Stock actualizado correctamente.")
         except Exception as e:
-            conn_products.rollback()
+            self.connection.rollback()
             print(f"Error al actualizar el stock: {e}")
             raise HTTPException(status_code=500, detail="Error al actualizar el stock.")
-        finally:
-            release_connection(conn_products)
         
     async def delete_products(self, products_id:int)-> None:
-        conn_products = get_connection()
         try:
-            with conn_products.cursor() as cur:
+            print(f"Producto a marcar como inactivo: {products_id}")
+            with self.connection.cursor() as cur:
+                
                 cur.execute(sql.SQL("""
                     UPDATE products SET products_is_active = FALSE WHERE products_id = %s;
                 """), (products_id,))
@@ -143,11 +150,9 @@ class ProductsConnection():
                 if cur.rowcount == 0:
                     raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-                conn_products.commit()
+                self.connection.commit()
                 print("Producto marcado inactivo correctamente.")
         except Exception as e:
-            conn_products.rollback() 
+            self.connection.rollback() 
             print(f"Error al marcar inactivo el producto: {e}")
             raise HTTPException(status_code=500, detail="Error al marcar inactivo el producto.")
-        finally:
-            release_connection(conn_products)

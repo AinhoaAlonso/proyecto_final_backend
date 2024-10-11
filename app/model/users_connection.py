@@ -4,18 +4,23 @@ import bcrypt
 from fastapi import HTTPException
 from typing import List, Optional
 from app.schema.users_schema import ResponseUsersSchema, CreateUsersSchema
-from app.model.database import get_connection, release_connection
+from app.model.database import get_connection
 
 
 class UsersConnection():
-    #connection = None
-    def __init__(self, connection):
-        pass
 
+    def __init__(self, connection):
+        self.connection = get_connection()
+    
+    def __del__(self):
+        if self.connection:
+            self.connection.close()
+    
     def show_users(self) -> List[ResponseUsersSchema]:
-        conn = get_connection()
+        if self.connection is None:
+            raise Exception("Conexión a la base de datos no establecida")
         try:
-            with conn.cursor() as cur:
+            with self.connection.cursor() as cur:
                 cur.execute("""
                     SELECT users_id, users_name, users_lastname_one, users_lastname_two, users_email, users_role, users_is_active FROM "users"
                 """)
@@ -32,30 +37,31 @@ class UsersConnection():
                         users_is_active = row[6]
                         )for row in results
                 ]
-                #return users
+                return users
         except Exception as e:
             print(f"Error para mostrar los posts: {e}")
-            return []
-        finally:
-            release_connection(conn)
+            return[]
     
     def show_userId(self, users_id: int) -> Optional[dict]:
-        conn = get_connection()
+        """Obtiene un único usuario de la base de datos por su ID."""
+        if self.connection is None:
+            raise Exception("Conexión a la base de datos no establecida")
         try:
-            with conn.cursor() as cur:
+            with self.connection.cursor() as cur:
                 cur.execute("""
                     SELECT users_id, users_name, users_lastname_one, users_lastname_two, users_email, users_password, users_role, users_is_active
                     FROM "users" WHERE users_id = %s
                 """, (users_id,))
                 result = cur.fetchone()
                 if result:
+
                     return {
                         "users_id": result[0],
                         "users_name": result[1],
                         "users_lastname_one": result[2],
                         "users_lastname_two": result[3],
                         "users_email": result[4],
-                        "users_password": result[5],  
+                        "users_password": result[5], 
                         "users_role": result[6],
                         "users_is_active": result[7]
                     }
@@ -63,67 +69,51 @@ class UsersConnection():
         except Exception as e:
             print(f"Error al obtener el usuario por ID: {e}")
             return None
-        finally:
-            release_connection(conn)
-
+        
     async def insert_user(self,data:dict):
-        conn = get_connection()
+        if self.connection is None:
+            raise Exception("Conexión a la base de datos no establecida")
         try:
-            with conn.cursor() as cur:
-                # Hashear la contraseña antes de guardarla
-                hashed_password = bcrypt.hashpw(data['users_password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            # Hashear la contraseña
+            hashed_password = bcrypt.hashpw(data['users_password'].encode('utf-8'), bcrypt.gensalt())
+            # Almacena el hash como cadena
+            data['users_password'] = hashed_password.decode('utf-8')
+
+            with self.connection.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO "users" (users_name, users_lastname_one, users_lastname_two, users_email, users_password, users_role, users_is_active)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING users_id
-                """, (data['users_name'], data['users_lastname_one'], data['users_lastname_two'],
-                      data['users_email'], hashed_password, data['users_role'], data['users_is_active']))
-                user_id = cur.fetchone()[0]
-                conn.commit()
-                return user_id
+                    INSERT INTO  "users" (users_name, users_lastname_one, users_lastname_two, users_email, users_password, users_role, users_is_active) VALUES (%(users_name)s, %(users_lastname_one)s, %(users_lastname_two)s, %(users_email)s, %(users_password)s, %(users_role)s, %(users_is_active)s)
+                """, data)
+                self.connection.commit()
         except Exception as e:
             print(f"Error al insertar el usuario: {e}")
-            conn.rollback()  # Hacer rollback en caso de error
+            self.connection.rollback()
             raise HTTPException(status_code=500, detail="Error al insertar usuario")
-        finally:
-            release_connection(conn)
 
     async def update_users(self, users_id:int, data:dict):
-        conn = get_connection()
         try:
-            with conn.cursor() as cur:
-                # Si no se proporciona una nueva contraseña, se mantiene la actual
-                if data.get('users_password'):
-                    hashed_password = bcrypt.hashpw(data['users_password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                else:
-                    # Obtener la contraseña actual del usuario para mantenerla
-                    cur.execute("SELECT users_password FROM users WHERE users_id = %s", (users_id,))
-                    current_password = cur.fetchone()
-                    hashed_password = current_password[0] if current_password else None
-
+            with self.connection.cursor() as cur:
                 cur.execute("""
-                    UPDATE "users"
-                    SET users_name = %s,
-                        users_lastname_one = %s,
-                        users_lastname_two = %s,
-                        users_email = %s,
-                        users_password = %s,
-                        users_role = %s,
-                        users_is_active = %s
-                    WHERE users_id = %s
-                """, (data['users_name'], data['users_lastname_one'], data['users_lastname_two'],
-                      data['users_email'], hashed_password, data['users_role'], data['users_is_active'], users_id))
-                conn.commit()
+                    UPDATE "users" SET users_name=%(users_name)s, users_lastname_one=%(users_lastname_one)s, users_lastname_two=%(users_lastname_two)s, users_email=%(users_email)s, users_password=%(users_password)s, users_role=%(users_role)s, users_is_active=%(users_is_active)s WHERE users_id = %(users_id)s;
+                """, {**data, "users_id": users_id})
+
+                print("Rowcount después de actualizar:", cur.rowcount)
+                
+                if cur.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+
+                self.connection.commit()
+                print("Usuario actualizado correctamente.")
         except Exception as e:
+            self.connection.rollback()
             print(f"Error al actualizar el usuario: {e}")
-            conn.rollback()
             raise HTTPException(status_code=500, detail="Error al actualizar el usuario.")
-        finally:
-            release_connection(conn) 
+
 
     def login_users(self, email:str, password:str) -> ResponseUsersSchema:
-        conn = get_connection()
+        if self.connection is None:
+            raise Exception("Conexión a la base de datos no establecida")
         try:
-            with conn.cursor() as cur:
+            with self.connection.cursor() as cur:
                 cur.execute("""
                     SELECT users_id, users_name, users_lastname_one, users_lastname_two, users_email, users_password, users_role, users_is_active 
                     FROM "users"
@@ -155,6 +145,3 @@ class UsersConnection():
         except Exception as e:
             print(f"Error para mostrar los usuarios: {e}")
             raise HTTPException(status_code=500, detail="Error interno del servidor")
-        finally:
-            release_connection(conn)
-
