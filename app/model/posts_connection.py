@@ -1,19 +1,22 @@
 import psycopg2
 import os
+from dotenv import load_dotenv
 from typing import List
 from fastapi import HTTPException
 from app.schema.posts_schema import PostSchema
-from app.model.database import get_connection
 
-
+load_dotenv()
 class PostsConnection():
+    connection = None
+
     def __init__(self):
-        self.connection = get_connection()
-    
-    def __del__(self):
-        if self.connection:
+        try:
+            self.connection = psycopg2.connect(os.getenv("DATABASE_URL"))
+        except psycopg2.OperationalError as error:
+            print(error)
             self.connection.close()
-  
+    
+    # Vamos a crear una funcion que nos traiga nuestros posts
     def show_posts(self) -> List[PostSchema]:
         if self.connection is None:
             raise Exception("Conexión a la base de datos no establecida")
@@ -91,3 +94,7 @@ class PostsConnection():
             (f"Error al eliminar el post: {e}")
             raise HTTPException(status_code=500, detail="Error al eliminar el post.")
         
+    #Vamos a crear un destructor para que siempre que se haga algo en la base de datos se cierre esa conexion
+    def __del__(self):
+        if self.connection:
+            self.connection.close()

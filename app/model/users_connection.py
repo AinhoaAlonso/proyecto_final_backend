@@ -1,19 +1,21 @@
 import os
+from dotenv import load_dotenv
 import psycopg2
 import bcrypt
 from fastapi import HTTPException
-from typing import List, Optional
-from app.schema.users_schema import ResponseUsersSchema, CreateUsersSchema
-from app.model.database import get_connection
 
+from typing import List, Optional
+from app.schema.users_schema import ResponseUsersSchema
+
+load_dotenv()
 
 class UsersConnection():
-
-    def __init__(self, connection):
-        self.connection = get_connection()
-    
-    def __del__(self):
-        if self.connection:
+    connection = None
+    def __init__(self):
+        try:
+            self.connection = psycopg2.connect(os.getenv("DATABASE_URL"))
+        except psycopg2.OperationalError as error:
+            print(error)
             self.connection.close()
     
     def show_users(self) -> List[ResponseUsersSchema]:
@@ -40,7 +42,6 @@ class UsersConnection():
                 return users
         except Exception as e:
             print(f"Error para mostrar los posts: {e}")
-            return[]
     
     def show_userId(self, users_id: int) -> Optional[dict]:
         """Obtiene un único usuario de la base de datos por su ID."""
@@ -54,23 +55,23 @@ class UsersConnection():
                 """, (users_id,))
                 result = cur.fetchone()
                 if result:
-
+                    # Devuelve un diccionario con los datos del usuario
                     return {
                         "users_id": result[0],
                         "users_name": result[1],
                         "users_lastname_one": result[2],
                         "users_lastname_two": result[3],
                         "users_email": result[4],
-                        "users_password": result[5], 
+                        "users_password": result[5],  # Incluye la contraseña para uso interno
                         "users_role": result[6],
                         "users_is_active": result[7]
                     }
-                return None  
+                return None  # Devuelve None si el usuario no se encuentra
         except Exception as e:
             print(f"Error al obtener el usuario por ID: {e}")
             return None
-        
-    async def insert_user(self,data:dict):
+
+    async def insert_user(self,data:dict) -> None:
         if self.connection is None:
             raise Exception("Conexión a la base de datos no establecida")
         try:
@@ -86,11 +87,21 @@ class UsersConnection():
                 self.connection.commit()
         except Exception as e:
             print(f"Error al insertar el usuario: {e}")
-            self.connection.rollback()
-            raise HTTPException(status_code=500, detail="Error al insertar usuario")
 
-    async def update_users(self, users_id:int, data:dict):
+    async def update_users(self, users_id:int, data:dict)->None:
         try:
+            print(f"Usuario a actualizar: {data}")
+
+            print(f"""UPDATE "users" SET users_name='{data['users_name']}', 
+                      users_lastname_one='{data['users_lastname_one']}', 
+                      users_lastname_two='{data['users_lastname_two']}', 
+                      users_email='{data['users_email']}', 
+                      users_password='{data['users_password']}', 
+                      users_role='{data['users_role']}', 
+                      users_is_active={data['users_is_active']} 
+                      WHERE users_id = {users_id};""")
+            
+
             with self.connection.cursor() as cur:
                 cur.execute("""
                     UPDATE "users" SET users_name=%(users_name)s, users_lastname_one=%(users_lastname_one)s, users_lastname_two=%(users_lastname_two)s, users_email=%(users_email)s, users_password=%(users_password)s, users_role=%(users_role)s, users_is_active=%(users_is_active)s WHERE users_id = %(users_id)s;
@@ -145,3 +156,7 @@ class UsersConnection():
         except Exception as e:
             print(f"Error para mostrar los usuarios: {e}")
             raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+    def __del__(self):
+        if self.connection:
+            self.connection.close()

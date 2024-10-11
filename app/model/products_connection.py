@@ -1,18 +1,23 @@
 import os
+from dotenv import load_dotenv
 from fastapi import UploadFile, File, HTTPException
 import psycopg2
 from psycopg2 import sql
 from typing import List
 from app.schema.products_schema import ProductsSchema
-from app.model.database import get_connection
+
+load_dotenv()
 
 class ProductsConnection():
+    connection:True
+
     def __init__(self):
-        self.connection = get_connection()
-    
-    def __del__(self):
-        if self.connection:
-            self.connection.close()
+        try:
+            self.connection = psycopg2.connect(os.getenv("DATABASE_URL"))
+            print("Conexión establecida correctamente")
+        except psycopg2.OperationalError as error:
+            print(f"Error en la conexion: {error}")
+            #self.connection.close()
     
     def get_products(self) -> List[ProductsSchema]:
         try:
@@ -156,3 +161,7 @@ class ProductsConnection():
             self.connection.rollback() 
             print(f"Error al marcar inactivo el producto: {e}")
             raise HTTPException(status_code=500, detail="Error al marcar inactivo el producto.")
+
+    def __del__(self):
+        if self.connection:
+            self.connection.close()
