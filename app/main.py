@@ -36,7 +36,7 @@ connorders = OrdersCustomersConnections()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "http://localhost:3000/login"],  
+    allow_origins=["https://tucasaorganizada-9ba7d5ba9e54.herokuapp.com"],  
     allow_credentials=True,
     allow_methods=["*"],  
     allow_headers=["*"],  
@@ -312,7 +312,6 @@ async def update_user(
     user = conn.show_userId(users_id= users_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
 
     if users_password:
          # Hashear la contraseña

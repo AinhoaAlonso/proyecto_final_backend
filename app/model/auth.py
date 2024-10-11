@@ -4,9 +4,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import HTTPException, Depends
-from dotenv import load_dotenv
 
-load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
@@ -16,13 +14,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-def create_token(data: dict):
+def create_token(data: dict) -> str:
     data_token = data.copy()
     data_token["exp"] = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     token_jwt = jwt.encode(data_token, key=SECRET_KEY, algorithm=ALGORITHM)
     return token_jwt
 
-def verify_token(token: str = Depends(oauth2_scheme)):
+def verify_token(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])  # Decodifica el token
         username: str = payload.get("sub")  # Obtiene el nombre de usuario
