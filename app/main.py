@@ -36,7 +36,8 @@ connorders = OrdersCustomersConnections()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://tucasaorganizada-9ba7d5ba9e54.herokuapp.com"],  
+    # allow_origins=["https://tucasaorganizada-9ba7d5ba9e54.herokuapp.com"],  
+    allow_origins=["https://tucasaorganizada-frontend.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],  
     allow_headers=["*"],  
